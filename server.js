@@ -15,7 +15,7 @@ const UPLOAD_DIR = path.join(path.dirname(DATA_FILE), 'uploads');
 const SEED_FILE = path.join(__dirname, 'seed.json');
 
 let db = null;
-let saveTimer = null;
+let pendingSave = null;
 function saveFile() {
   fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true });
   const tmp = DATA_FILE + '.tmp';
@@ -32,8 +32,7 @@ async function saveSupabase() {
 }
 function save() {
   if (!USE_SUPABASE) return saveFile();
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => saveSupabase().catch(e => console.error(e.message)), 300);
+  pendingSave = saveSupabase().catch(e => console.error(e.message));
 }
 async function loadRemote() {
   const r = await fetch(SUPABASE_URL + '/rest/v1/app_state?id=eq.1&select=data', {
@@ -149,6 +148,13 @@ function token() {
 const IMG_TYPES = { png: 'image/png', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif' };
 function saveImage(dataUrl) {
   if (!dataUrl) return null;
+  if (USE_SUPABASE) {
+    const m0 = String(dataUrl).match(/^data:image\/(png|jpeg|webp|gif);base64,([A-Za-z0-9+/=]+)$/);
+    if (!m0) throw new Error('图片格式不对，只支持 png/jpg/webp/gif');
+    const len = Buffer.from(m0[2], 'base64').length;
+    if (len === 0 || len > 2 * 1024 * 1024) throw new Error('图片要小于 2MB');
+    return dataUrl;
+  }
   const m = String(dataUrl).match(/^data:image\/(png|jpeg|webp|gif);base64,([A-Za-z0-9+/=]+)$/);
   if (!m) throw new Error('图片格式不对，只支持 png/jpg/webp/gif');
   const buf = Buffer.from(m[2], 'base64');
@@ -173,7 +179,7 @@ function json(res, code, obj) {
 }
 const clean = (s, max) => String(s || '').trim().slice(0, max);
 
-const server = http.createServer(async (req, res) => {
+async function handle(req, res) {
   const url = new URL(req.url, 'http://x');
   const p = url.pathname;
   try {
@@ -314,9 +320,15 @@ const server = http.createServer(async (req, res) => {
   } catch (e) {
     json(res, 500, { error: String(e && e.message || e) });
   }
-});
+}
 
-load().then(() => {
-  server.listen(PORT, () => console.log('muse-invite-site listening on :' + PORT));
-  if (PUBLIC_URL) setInterval(() => fetch(PUBLIC_URL + '/health').catch(() => {}), 10 * 60 * 1000);
-});
+let loadPromise = null;
+function ensureLoaded() { if (!loadPromise) loadPromise = load(); return loadPromise; }
+if (require.main === module) {
+  ensureLoaded().then(() => {
+    http.createServer(handle).listen(PORT, () => console.log('muse-invite-site listening on :' + PORT));
+    if (PUBLIC_URL) setInterval(() => fetch(PUBLIC_URL + '/health').catch(() => {}), 10 * 60 * 1000);
+  });
+} else {
+  module.exports = async (req, res) => { await ensureLoaded(); await handle(req, res); if (pendingSave) await pendingSave; };
+}
