@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: muse-invite-site
+    env: node
+    plan: free
+    startCommand: node server.js
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: PUBLIC_URL
+        sync: false
