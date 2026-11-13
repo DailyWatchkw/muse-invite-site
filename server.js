@@ -10,6 +10,7 @@ const PUBLIC_URL = (process.env.PUBLIC_URL || process.env.RENDER_EXTERNAL_URL ||
 const SUPABASE_URL = (process.env.SUPABASE_URL || '').replace(/\/$/, '');
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const USE_SUPABASE = !!(SUPABASE_URL && SUPABASE_KEY);
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
 const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'data', 'db.json');
 const UPLOAD_DIR = path.join(path.dirname(DATA_FILE), 'uploads');
 const SEED_FILE = path.join(__dirname, 'seed.json');
@@ -273,6 +274,32 @@ async function handle(req, res) {
       if (c.reports >= 3) c.hidden = true; save();
       return json(res, 200, state());
     }
+    // 管理后台（口令在环境变量 ADMIN_TOKEN，未设置时整体关闭）
+    if (p.startsWith('/api/admin/')) {
+      if (!ADMIN_TOKEN) return json(res, 404, { error: 'not found' });
+      if (req.headers['x-admin-token'] !== ADMIN_TOKEN) return json(res, 401, { error: '口令不对' });
+      if (p === '/api/admin/overview' && req.method === 'GET') {
+        const all = db.codes.filter(c => c.status !== 'deleted')
+          .sort((a, b) => (b.pinned - a.pinned) || b.id - a.id)
+          .map(c => ({ ...pub(c), reports: c.reports || 0 }));
+        return json(res, 200, { codes: all, stats: visitStats(), total: all.length });
+      }
+      const mAdm = p.match(/^\/api\/admin\/codes\/(\d+)$/);
+      if (mAdm) {
+        const c = db.codes.find(x => x.id === +mAdm[1]);
+        if (!c || c.status === 'deleted') return json(res, 404, { error: 'not found' });
+        if (req.method === 'PATCH') {
+          const body = await readBody(req);
+          const rem = parseInt(body.remaining, 10);
+          if (Number.isFinite(rem)) c.remaining = Math.min(c.totalSlots, Math.max(0, rem));
+          if (typeof body.pinned === 'boolean') c.pinned = body.pinned;
+          refreshStatus(c); save();
+          return json(res, 200, { entry: pub(c) });
+        }
+        if (req.method === 'DELETE') { c.status = 'deleted'; save(); return json(res, 200, { ok: true }); }
+      }
+      return json(res, 404, { error: 'not found' });
+    }
     // 管理
     const mMan = p.match(/^\/api\/manage\/([A-Za-z0-9]+)$/);
     if (mMan) {
@@ -312,8 +339,9 @@ async function handle(req, res) {
     // 静态文件：只对外提供 index.html
     let file = p;
     if (p === '/' || p.startsWith('/manage/')) file = '/index.html';
-    if (file !== '/index.html') return json(res, 404, { error: 'not found' });
-    const fp = path.join(__dirname, 'index.html');
+    if (p === '/admin' || p.startsWith('/admin/')) file = '/admin.html';
+    if (file !== '/index.html' && file !== '/admin.html') return json(res, 404, { error: 'not found' });
+    const fp = path.join(__dirname, file);
     if (!fs.existsSync(fp)) return json(res, 404, { error: 'not found' });
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     fs.createReadStream(fp).pipe(res);
