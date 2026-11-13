@@ -88,7 +88,7 @@ async function load(){
         <span class="note">/ ${c.totalSlots}</span>
         <button onclick="saveRem(${c.id})">保存</button>
         <button onclick="togglePin(${c.id}, ${c.pinned?'false':'true'})">${c.pinned?'取消置顶':'置顶'}</button>
-        <button onclick="delCode(${c.id}, '${esc(c.code)}')">删除</button>
+        <span id="del-${c.id}"><button onclick="askDel(${c.id})">删除</button></span>
       </div>
     </div>`).join('') : '<div class="empty">还没有邀请码。</div>';
 }
@@ -101,8 +101,13 @@ window.togglePin = async (id, pinned) => {
   const r = await api('/api/admin/codes/'+id, { method:'PATCH', body: JSON.stringify({ pinned }) });
   toast(r.ok ? '已更新' : '操作失败'); if(r.ok) load();
 };
-window.delCode = async (id, code) => {
-  if(!confirm('确认删除邀请码 ' + code + '？')) return;
+window.askDel = id => {
+  $('del-'+id).innerHTML = '<button onclick="delCode(' + id + ')" title="确认删除">✓</button> <button onclick="cancelDel(' + id + ')" title="取消">✕</button>';
+};
+window.cancelDel = id => {
+  $('del-'+id).innerHTML = '<button onclick="askDel(' + id + ')">删除</button>';
+};
+window.delCode = async id => {
   const r = await api('/api/admin/codes/'+id, { method:'DELETE' });
   toast(r.ok ? '已删除' : '删除失败'); if(r.ok) load();
 };
