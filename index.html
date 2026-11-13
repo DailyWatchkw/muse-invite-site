@@ -133,8 +133,12 @@ function render(){
   $('deadWrap').style.display = dead.length ? 'block' : 'none';
   $('deadpool').innerHTML = dead.map(cardHTML).join('');
 }
+function cacheState(){ try{ localStorage.setItem('muse_state', JSON.stringify(state)); }catch(e){} }
 async function load(){
-  const r = await fetch('/api/codes'); state = await r.json(); render();
+  if(!state.codes.length){
+    try{ const cached = JSON.parse(localStorage.getItem('muse_state')||'null'); if(cached && cached.codes){ state = cached; render(); } }catch(e){}
+  }
+  const r = await fetch('/api/codes'); state = await r.json(); cacheState(); render();
 }
 async function copyText(text){
   try{ await navigator.clipboard.writeText(text); return true; }
@@ -182,7 +186,8 @@ $('shareBtn').onclick = async ()=>{
   $('shareText').value=''; $('detectHint').textContent='';
   toast('提交成功'); load();
 };
-fetch('/api/visit', {method:'POST'}).catch(()=>{}).finally(()=>load());
+fetch('/api/visit', {method:'POST'}).catch(()=>{});
+load();
 setInterval(()=>{ load(); }, 30000);
 </script>
 </body>
