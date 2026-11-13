@@ -83,6 +83,11 @@
       </div>
     </aside>
   </div>
+  <footer>
+    <p><strong>使用条款</strong>：本站为非官方的网友互助站，与 Muse 官方无关。站内邀请码均由网友自愿分享，站方不对其真实性、可用性和剩余名额作任何保证，能否兑换成功以官方规则为准。</p>
+    <p>新账号兑换邀请码的时限、奖励规则等以官方公布为准；请勿付费购买邀请码，谨防诈骗。禁止在本站发布违法、广告或与邀请码无关的内容，禁止批量刷码、刷举报等扰乱秩序的行为，站方有权删除违规内容。</p>
+    <p>如认为某条内容侵权或不当，请联系站方处理：467550684@qq.com。继续使用本站即视为同意以上条款。</p>
+  </footer>
 </main>
 
 <div class="toast" id="toast"></div>
@@ -112,9 +117,10 @@ function cardHTML(c){
       <span class="grow"></span>
       <span class="slots">${c.remaining}/${c.totalSlots} 剩余</span>
       <button class="primary" data-act="copy" ${grey?'disabled':''}>复制</button>
+      ${grey ? '' : (hasReported('code', c.id) ? '<button disabled>已举报</button>' : '<button data-act="report">没用</button>')}
     </div>
     <div class="prog"><i style="width:${pct}%"></i></div>
-    <div class="row" style="margin-top:8px"><span class="note">${c.sourceNote?esc(c.sourceNote)+' · ':''}${rel(c.createdAt)}分享</span></div>
+    <div class="row" style="margin-top:8px"><span class="note">${c.sourceNote?esc(c.sourceNote)+' · ':''}${rel(c.createdAt)}分享${c.reports ? ' · 被举报 ' + c.reports + ' 次' : ''}</span></div>
     ${c.image?`<img class="thumb" src="${esc(c.image)}" alt="分享者附图" loading="lazy">`:''}
   </div>`;
 }
