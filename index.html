@@ -128,7 +128,13 @@ function render(){
   const poolOk = state.codes.filter(c => c.status==='available');
   const poolDead = state.codes.filter(c => c.status!=='available');
   const poolHtml = poolOk.length ? poolOk.map(cardHTML).join('') : '<div class="empty">暂时没有可用的码。</div>';
-  if(poolHtml !== lastPoolHtml){ lastPoolHtml = poolHtml; $('pool').innerHTML = poolHtml; $('pool2').innerHTML = poolHtml; resetTicker(); }
+  if(poolHtml !== lastPoolHtml){
+    const topEl = $('pool').children[tIdx]; const topId = topEl ? topEl.dataset.id : null;
+    lastPoolHtml = poolHtml; $('pool').innerHTML = poolHtml; $('pool2').innerHTML = poolHtml;
+    let ni = 0;
+    if(topId){ const kids = $('pool').children; for(let i=0;i<kids.length;i++){ if(kids[i].dataset.id===topId){ ni = i; break; } } }
+    snapTo(ni); restartTimer();
+  }
   const dead = poolDead;
   $('deadWrap').style.display = dead.length ? 'block' : 'none';
   $('deadpool').innerHTML = dead.map(cardHTML).join('');
@@ -148,13 +154,19 @@ async function copyText(text){
 let lastPoolHtml = null, tIdx = 0, tTimer = null;
 function cardOffsets(){ const offs=[0]; let acc=0; for(const k of $('pool').children){ acc += k.offsetHeight + 10; offs.push(acc); } return offs; }
 function setY(y){ $('track').style.transform = 'translateY(-' + y + 'px)'; }
+function snapTo(idx){
+  const tr = $('track'); tr.style.transition = 'none';
+  tIdx = idx; setY(cardOffsets()[idx] || 0);
+  void tr.offsetWidth; tr.style.transition = '';
+}
 function tickerStep(){
   const n = $('pool').children.length; if(n < 2) return;
+  if(tIdx >= n) snapTo(0);
   const offs = cardOffsets();
-  if(tIdx >= n){ const tr = $('track'); tr.style.transition = 'none'; tIdx = 0; setY(0); void tr.offsetWidth; tr.style.transition = ''; return; }
   tIdx++; setY(offs[tIdx]);
 }
-function resetTicker(){ tIdx = 0; setY(0); if(tTimer) clearInterval(tTimer); tTimer = setInterval(tickerStep, 3000); }
+function restartTimer(){ if(tTimer) clearInterval(tTimer); tTimer = setInterval(tickerStep, 3000); }
+function resetTicker(){ snapTo(0); restartTimer(); }
 const tk = $('ticker');
 tk.addEventListener('pointerenter', ()=>{ if(tTimer) clearInterval(tTimer); });
 tk.addEventListener('pointerleave', ()=>{ if(tTimer) clearInterval(tTimer); tTimer = setInterval(tickerStep, 3000); });
