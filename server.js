@@ -356,6 +356,12 @@ async function handle(req, res) {
       res.writeHead(200, { 'Content-Type': 'application/xml; charset=utf-8' });
       return res.end('<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n<url><loc>' + (PUBLIC_URL || '') + '/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>\n</urlset>\n');
     }
+    if (p === '/og.png') {
+      const fp = path.join(__dirname, 'og.png');
+      if (!fs.existsSync(fp)) return json(res, 404, { error: 'not found' });
+      res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' });
+      return fs.createReadStream(fp).pipe(res);
+    }
     if (p === '/f719408ca62eb71920e6a05f760cabba.txt') {
       res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
       return res.end('f719408ca62eb71920e6a05f760cabba');
