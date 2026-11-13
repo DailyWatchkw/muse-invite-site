@@ -83,8 +83,6 @@
         <label for="shareText">邀请码</label>
         <input id="shareText" placeholder="填 6 位邀请码，或粘贴整段邀请文字" autocomplete="off">
         <div class="hint" id="detectHint"></div>
-        <label for="shareTime">时间</label>
-        <input id="shareTime" placeholder="如：今晚 12 点前有效" autocomplete="off">
         <div style="margin-top:16px"><button class="primary" id="shareBtn" style="width:100%">提交</button></div>
         <div class="manage-box" id="manageBox"></div>
       </div>
@@ -165,15 +163,14 @@ function dropToken(t){ localStorage.setItem('muse_tokens', JSON.stringify(myToke
 $('shareBtn').onclick = async ()=>{
   const rawText = $('shareText').value.trim();
   if(!extract(rawText)){ toast('没识别到 6 位邀请码，检查一下填写内容'); return; }
-  const timeNote = $('shareTime').value.trim();
-  const r = await fetch('/api/codes', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({rawText, totalSlots: 30, sourceNote: timeNote || null})});
+  const r = await fetch('/api/codes', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({rawText, totalSlots: 30})});
   const data = await r.json();
   if(!r.ok){ toast(data.error||'提交失败'); return; }
   saveToken(data.manageToken);
   const link = location.origin + data.managePath;
   const box = $('manageBox'); box.style.display='block';
   box.innerHTML = `已加入左边的列表 ✅<br>管理链接（只显示这一次，建议保存）：<br><a href="${link}">${link}</a>`;
-  $('shareText').value=''; $('shareTime').value=''; $('detectHint').textContent='';
+  $('shareText').value=''; $('detectHint').textContent='';
   toast('提交成功'); load();
 };
 fetch('/api/visit', {method:'POST'}).catch(()=>{}).finally(()=>load());
