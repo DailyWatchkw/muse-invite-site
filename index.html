@@ -24,9 +24,6 @@
   main{max-width:920px;margin:0 auto;padding:0 16px}
   h3.sec{font-size:17px;margin:26px 0 4px;display:flex;align-items:center;gap:8px}
   
-  .filters{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 4px}
-  .fchip{border:1px solid #d8deee;background:#fff;border-radius:20px;padding:7px 14px;font-size:13px;cursor:pointer;min-height:36px}
-  .fchip.on{background:#2563eb;color:#fff;border-color:#2563eb}
   .layout{display:grid;gap:6px 22px}
   @media(min-width:860px){ .layout{grid-template-columns:1.25fr .85fr;align-items:start} .col-side{position:sticky;top:66px} }
   .ticker{height:432px;overflow:hidden}
@@ -69,11 +66,6 @@
   <div class="layout">
     <section class="col-main">
       <h3 class="sec" style="margin-top:18px">领邀请码</h3>
-      <div class="filters" id="filters">
-        <button class="fchip on" data-f="all">全部</button>
-        <button class="fchip" data-f="ok">只看可用</button>
-        <button class="fchip" data-f="dead">只看失效</button>
-      </div>
       <div class="ticker" id="ticker"><div class="track" id="track"><div id="pool"></div><div id="pool2"></div></div></div>
 
       <h3 class="sec">搜集</h3>
@@ -105,7 +97,6 @@
 <script>
 const $ = id => document.getElementById(id);
 let state = { codes: [], collected: [], availableCount: 0, gallery: [], comments: [], stats: {} };
-let filter = 'all';
 /* 设备标识 + 本机已反馈记录（防刷：一台设备对一条内容只能反馈一次） */
 function myDid(){
   let d = localStorage.getItem('muse_did');
@@ -134,22 +125,17 @@ function cardHTML(c){
     ${c.image?`<img class="thumb" src="${esc(c.image)}" alt="分享者附图" loading="lazy">`:''}
   </div>`;
 }
-function passFilter(c){
-  if(filter==='ok') return c.status==='available';
-  if(filter==='dead') return c.status!=='available';
-  return true;
-}
 function render(){
-  const poolOk = state.codes.filter(c => c.status==='available' && passFilter(c));
+  const poolOk = state.codes.filter(c => c.status==='available');
   const poolDead = state.codes.filter(c => c.status!=='available');
-  const colOk = state.collected.filter(c => c.status==='available' && passFilter(c));
+  const colOk = state.collected.filter(c => c.status==='available');
   const colDead = state.collected.filter(c => c.status!=='available');
   const poolHtml = poolOk.length ? poolOk.map(cardHTML).join('') : '<div class="empty">这个筛选下没有码。</div>';
   $('pool').innerHTML = poolHtml; $('pool2').innerHTML = poolHtml;
-  $('track').style.setProperty('--dur', Math.max(18, poolOk.length * 4) + 's');
+  $('track').style.setProperty('--dur', Math.max(24, poolOk.length * 6) + 's');
   $('collected').innerHTML = colOk.length ? colOk.map(cardHTML).join('') : '<div class="empty">这个筛选下没有码。</div>';
   const dead = [...poolDead, ...colDead];
-  $('deadWrap').style.display = (dead.length && filter!=='ok') ? 'block' : 'none';
+  $('deadWrap').style.display = dead.length ? 'block' : 'none';
   $('deadpool').innerHTML = dead.map(cardHTML).join('');
 }
 async function load(){
@@ -159,23 +145,6 @@ async function copyText(text){
   try{ await navigator.clipboard.writeText(text); return true; }
   catch(e){ const ta=document.createElement('textarea'); ta.value=text; document.body.appendChild(ta); ta.select(); let ok=false; try{ ok=document.execCommand('copy'); }catch(_){} ta.remove(); return ok; }
 }
-/* 筛选 */
-$('filters').addEventListener('click', e => {
-  const b = e.target.closest('.fchip'); if(!b) return;
-  filter = b.dataset.f;
-  document.querySelectorAll('.fchip').forEach(x => x.classList.toggle('on', x===b));
-  render();
-});
-document.addEventListener('click', async e=>{
-  const btn = e.target.closest('button[data-act]'); if(!btn) return;
-  const wrap = btn.closest('[data-kind]'); if(!wrap) return;
-  if(wrap.dataset.kind!=='code' || btn.dataset.act!=='copy') return;
-  const id = +wrap.dataset.id;
-  const c = [...state.codes, ...state.collected].find(x=>x.id===id); if(!c) return;
-  const ok = await copyText(c.code);
-  toast(ok ? '已复制 '+c.code+'，名额扣 1' : '复制失败，码是 '+c.code+' 请手动输入');
-  const r = await fetch(`/api/codes/${id}/copy`, {method:'POST'}); state = await r.json(); render();
-});
 /* 触摸时暂停滚动，方便点复制 */
 const tk = $('ticker');
 tk.addEventListener('pointerdown', ()=> tk.classList.add('paused'));
