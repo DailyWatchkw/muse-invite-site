@@ -27,9 +27,7 @@
   .layout{display:grid;gap:6px 22px}
   @media(min-width:860px){ .layout{grid-template-columns:1.25fr .85fr;align-items:start} .col-side{position:sticky;top:66px} }
   .ticker{height:432px;overflow:hidden}
-  .track{display:flex;flex-direction:column;animation:scrollUp var(--dur,40s) linear infinite}
-  .ticker:hover .track,.ticker.paused .track{animation-play-state:paused}
-  @keyframes scrollUp{from{transform:translateY(0)}to{transform:translateY(-50%)}}
+  .track{display:flex;flex-direction:column;transition:transform .6s ease}
   .card{background:#fff;border:1px solid #e6e9f4;border-radius:18px;padding:14px 16px;margin:10px 0;box-shadow:0 2px 10px rgba(49,56,120,.05)}
   .card.grey{opacity:.55;background:#f6f7fa}
   .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
@@ -67,9 +65,6 @@
     <section class="col-main">
       <h3 class="sec" style="margin-top:18px">领邀请码</h3>
       <div class="ticker" id="ticker"><div class="track" id="track"><div id="pool"></div><div id="pool2"></div></div></div>
-
-      <h3 class="sec">搜集</h3>
-      <div id="collected"></div>
 
       <div id="deadWrap">
         <h3 class="sec">失效</h3>
@@ -126,13 +121,9 @@ function cardHTML(c){
 function render(){
   const poolOk = state.codes.filter(c => c.status==='available');
   const poolDead = state.codes.filter(c => c.status!=='available');
-  const colOk = state.collected.filter(c => c.status==='available');
-  const colDead = state.collected.filter(c => c.status!=='available');
-  const poolHtml = poolOk.length ? poolOk.map(cardHTML).join('') : '<div class="empty">这个筛选下没有码。</div>';
-  $('pool').innerHTML = poolHtml; $('pool2').innerHTML = poolHtml;
-  $('track').style.setProperty('--dur', Math.max(24, poolOk.length * 6) + 's');
-  $('collected').innerHTML = colOk.length ? colOk.map(cardHTML).join('') : '<div class="empty">这个筛选下没有码。</div>';
-  const dead = [...poolDead, ...colDead];
+  const poolHtml = poolOk.length ? poolOk.map(cardHTML).join('') : '<div class="empty">暂时没有可用的码。</div>';
+  if(poolHtml !== lastPoolHtml){ lastPoolHtml = poolHtml; $('pool').innerHTML = poolHtml; $('pool2').innerHTML = poolHtml; resetTicker(); }
+  const dead = poolDead;
   $('deadWrap').style.display = dead.length ? 'block' : 'none';
   $('deadpool').innerHTML = dead.map(cardHTML).join('');
 }
@@ -143,10 +134,22 @@ async function copyText(text){
   try{ await navigator.clipboard.writeText(text); return true; }
   catch(e){ const ta=document.createElement('textarea'); ta.value=text; document.body.appendChild(ta); ta.select(); let ok=false; try{ ok=document.execCommand('copy'); }catch(_){} ta.remove(); return ok; }
 }
-/* 触摸时暂停滚动，方便点复制 */
+/* 一张卡一张卡往上滚：每 3 秒上移一张，悬停/按住暂停 */
+let lastPoolHtml = null, tIdx = 0, tTimer = null;
+function cardOffsets(){ const offs=[0]; let acc=0; for(const k of $('pool').children){ acc += k.offsetHeight + 10; offs.push(acc); } return offs; }
+function setY(y){ $('track').style.transform = 'translateY(-' + y + 'px)'; }
+function tickerStep(){
+  const n = $('pool').children.length; if(n < 2) return;
+  const offs = cardOffsets();
+  if(tIdx >= n){ const tr = $('track'); tr.style.transition = 'none'; tIdx = 0; setY(0); void tr.offsetWidth; tr.style.transition = ''; return; }
+  tIdx++; setY(offs[tIdx]);
+}
+function resetTicker(){ tIdx = 0; setY(0); if(tTimer) clearInterval(tTimer); tTimer = setInterval(tickerStep, 3000); }
 const tk = $('ticker');
-tk.addEventListener('pointerdown', ()=> tk.classList.add('paused'));
-tk.addEventListener('pointerup', ()=> setTimeout(()=>tk.classList.remove('paused'), 4000));
+tk.addEventListener('pointerenter', ()=>{ if(tTimer) clearInterval(tTimer); });
+tk.addEventListener('pointerleave', ()=>{ if(tTimer) clearInterval(tTimer); tTimer = setInterval(tickerStep, 3000); });
+tk.addEventListener('pointerdown', ()=>{ if(tTimer) clearInterval(tTimer); });
+tk.addEventListener('pointerup', ()=> setTimeout(()=>{ if(tTimer) clearInterval(tTimer); tTimer = setInterval(tickerStep, 3000); }, 4000));
 /* 分享码 */
 function extract(text){
   const up=(text||'').toUpperCase();
