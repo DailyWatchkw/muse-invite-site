@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>管理后台 · Muse 邀请码</title>
+<meta name="robots" content="noindex">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;background:#eef4ff;color:#16233d;padding-bottom:48px}
+  header{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.85);backdrop-filter:blur(14px);border-bottom:1px solid #e6e9f4}
+  .bar{max-width:920px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:10px}
+  .logo{width:30px;height:30px;border-radius:9px;background:#2563eb;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:16px}
+  .bar h1{font-size:16px;margin:0}
+  .grow{flex:1}
+  main{max-width:920px;margin:0 auto;padding:0 16px}
+  .panel{background:#fff;border:1px solid #e6e9f4;border-radius:18px;padding:16px;box-shadow:0 2px 10px rgba(49,56,120,.05);margin-top:16px}
+  .card{background:#fff;border:1px solid #e6e9f4;border-radius:18px;padding:14px 16px;margin:10px 0;box-shadow:0 2px 10px rgba(49,56,120,.05)}
+  .card.grey{opacity:.55}
+  .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:21px;font-weight:800;letter-spacing:2px}
+  .note{font-size:12px;color:#94a0b5}
+  .stats{font-size:14px;color:#3c4a63}
+  button{border:1px solid #d8deee;background:#fff;border-radius:12px;padding:8px 15px;font-size:14px;cursor:pointer;min-height:40px;font-family:inherit}
+  button.primary{background:#2563eb;border:none;color:#fff;font-weight:600}
+  button:active{transform:scale(.97)} button:disabled{opacity:.5}
+  input{border:1px solid #d8deee;border-radius:12px;padding:11px;font-size:16px;font-family:inherit;background:#fff}
+  input.num{width:90px}
+  .toast{position:fixed;left:50%;bottom:60px;transform:translateX(-50%);background:#1e40af;color:#fff;padding:10px 18px;border-radius:24px;font-size:14px;opacity:0;transition:.25s;pointer-events:none;max-width:88vw;text-align:center;z-index:60}
+  .toast.show{opacity:1}
+  .empty{color:#94a0b5;font-size:14px;padding:12px 0}
+</style>
+</head>
+<body>
+<header><div class="bar">
+  <span class="logo">M</span>
+  <h1>管理后台</h1>
+  <span class="grow"></span>
+  <button id="logout" style="display:none">退出</button>
+</div></header>
+
+<main>
+  <div class="panel" id="loginBox">
+    <div class="row" style="flex-wrap:nowrap">
+      <input id="tokenInput" type="password" placeholder="输入管理口令" style="flex:1" autocomplete="off">
+      <button class="primary" id="loginBtn" style="flex:none">进入</button>
+    </div>
+  </div>
+
+  <div id="app" style="display:none">
+    <div class="panel"><div class="stats" id="statsLine"></div></div>
+    <div id="list"></div>
+  </div>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
+function esc(s){ return String(s??'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function rel(iso){ const s=(Date.now()-new Date(iso))/1000; if(s<60) return '刚刚'; if(s<3600) return Math.floor(s/60)+' 分钟前'; if(s<86400) return Math.floor(s/3600)+' 小时前'; return Math.floor(s/86400)+' 天前'; }
+function token(){ return localStorage.getItem('muse_admin') || ''; }
+async function api(path, opt={}){
+  const r = await fetch(path, { ...opt, headers: { 'Content-Type':'application/json', 'x-admin-token': token(), ...(opt.headers||{}) } });
+  if(r.status === 401){ localStorage.removeItem('muse_admin'); showLogin(); throw new Error('口令不对'); }
+  return r;
+}
+function showLogin(){ $('loginBox').style.display='block'; $('app').style.display='none'; $('logout').style.display='none'; }
+function statusText(c){ return c.status==='available' ? '可用' : (c.status==='exhausted' ? '已用完' : '被举报失效'); }
+async function load(){
+  const r = await api('/api/admin/overview');
+  if(!r.ok){ toast('加载失败'); return; }
+  const d = await r.json();
+  $('loginBox').style.display='none'; $('app').style.display='block'; $('logout').style.display='block';
+  $('statsLine').textContent = `总访问 ${d.stats.views} · 今日 ${d.stats.todayViews} · 邀请码 ${d.total} 条`;
+  $('list').innerHTML = d.codes.length ? d.codes.map(c => `
+    <div class="card ${c.status!=='available'?'grey':''}">
+      <div class="row">
+        <span class="code">${esc(c.code)}</span>
+        ${c.pinned?'<span class="note">📌 置顶</span>':''}
+        ${c.collected?'<span class="note">搜集</span>':''}
+        <span class="grow" style="flex:1"></span>
+        <span class="note">${statusText(c)} · 被复制 ${c.usedCount} 次 · 被举报 ${c.reports||0} 次 · ${rel(c.createdAt)}</span>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <span class="note">剩余名额</span>
+        <input class="num" type="number" min="0" max="${c.totalSlots}" value="${c.remaining}" id="rem-${c.id}">
+        <span class="note">/ ${c.totalSlots}</span>
+        <button onclick="saveRem(${c.id})">保存</button>
+        <button onclick="togglePin(${c.id}, ${c.pinned?'false':'true'})">${c.pinned?'取消置顶':'置顶'}</button>
+        <button onclick="delCode(${c.id}, '${esc(c.code)}')">删除</button>
+      </div>
+    </div>`).join('') : '<div class="empty">还没有邀请码。</div>';
+}
+window.saveRem = async id => {
+  const v = $('rem-'+id).value;
+  const r = await api('/api/admin/codes/'+id, { method:'PATCH', body: JSON.stringify({ remaining: v }) });
+  toast(r.ok ? '已保存' : '保存失败'); if(r.ok) load();
+};
+window.togglePin = async (id, pinned) => {
+  const r = await api('/api/admin/codes/'+id, { method:'PATCH', body: JSON.stringify({ pinned }) });
+  toast(r.ok ? '已更新' : '操作失败'); if(r.ok) load();
+};
+window.delCode = async (id, code) => {
+  if(!confirm('确认删除邀请码 ' + code + '？')) return;
+  const r = await api('/api/admin/codes/'+id, { method:'DELETE' });
+  toast(r.ok ? '已删除' : '删除失败'); if(r.ok) load();
+};
+$('loginBtn').onclick = async () => {
+  const v = $('tokenInput').value.trim(); if(!v) return;
+  localStorage.setItem('muse_admin', v);
+  try{ await load(); }catch(e){ toast('口令不对'); }
+};
+$('tokenInput').addEventListener('keydown', e => { if(e.key==='Enter') $('loginBtn').click(); });
+$('logout').onclick = () => { localStorage.removeItem('muse_admin'); showLogin(); };
+if(token()) load().catch(()=>showLogin()); else showLogin();
+</script>
+</body>
+</html>
