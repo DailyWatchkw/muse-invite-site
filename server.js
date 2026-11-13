@@ -17,6 +17,7 @@ const SEED_FILE = path.join(__dirname, 'seed.json');
 
 let db = null;
 let pendingSave = null;
+let lastStatsSave = 0;
 function saveFile() {
   fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true });
   const tmp = DATA_FILE + '.tmp';
@@ -195,7 +196,10 @@ async function handle(req, res) {
   const p = url.pathname;
   try {
     if (p === '/health') return json(res, 200, { ok: true });
-    if (p === '/api/codes' && req.method === 'GET') return json(res, 200, state());
+    if (p === '/api/codes' && req.method === 'GET') {
+      res.setHeader('Cache-Control', 'public, s-maxage=30, stale-while-revalidate=300');
+      return json(res, 200, state());
+    }
     if (p === '/api/visit' && req.method === 'POST') {
       const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
       const now = Date.now();
@@ -206,7 +210,7 @@ async function handle(req, res) {
         db.stats.days[k] = (db.stats.days[k] || 0) + 1;
         const keys = Object.keys(db.stats.days).sort();
         while (keys.length > 30) delete db.stats.days[keys.shift()];
-        save();
+        if (Date.now() - lastStatsSave > 60000) { lastStatsSave = Date.now(); save(); }
       }
       return json(res, 200, visitStats());
     }
