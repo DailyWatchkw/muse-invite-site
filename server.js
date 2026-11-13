@@ -85,6 +85,7 @@ function pub(c) {
     id: c.id, code: c.code, totalSlots: c.totalSlots, remaining: c.remaining,
     pinned: c.pinned, collected: c.collected, sourceNote: c.sourceNote,
     status: c.status, usedCount: c.usedCount, createdAt: c.createdAt,
+    reports: c.reports || 0,
     image: c.image || null,
   };
 }
@@ -114,10 +115,12 @@ function visitStats() {
 function state() {
   const pool = db.codes.filter(c => !c.collected && c.status !== 'deleted');
   const pinned = pool.filter(c => c.pinned);
-  const rest = pool.filter(c => !c.pinned && c.status === 'available');
-  shuffle(rest);
+  const clean = pool.filter(c => !c.pinned && c.status === 'available' && !(c.reports > 0));
+  shuffle(clean);
+  const flagged = pool.filter(c => !c.pinned && c.status === 'available' && c.reports > 0)
+    .sort((a, b) => a.reports - b.reports);
   const grey = pool.filter(c => !c.pinned && c.status !== 'available');
-  const codes = [...pinned, ...rest.slice(0, 20), ...grey];
+  const codes = [...pinned, ...[...clean, ...flagged].slice(0, 20), ...grey];
   const collected = db.codes.filter(c => c.collected && c.status !== 'deleted').map(pub);
   const availableCount = pool.filter(c => c.status === 'available').length;
   const gallery = db.gallery.filter(g => !g.hidden)
