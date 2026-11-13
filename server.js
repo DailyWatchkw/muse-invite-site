@@ -206,7 +206,7 @@ async function handle(req, res) {
       if (db.codes.some(c => c.code === code && c.status !== 'deleted' && !c.collected))
         return json(res, 409, { error: '这个码已经在池子里了' });
       const total = Math.min(999, Math.max(1, parseInt(body.totalSlots, 10) || 30));
-      const entry = mk(code, total, false, null, new Date().toISOString());
+      const entry = mk(code, total, false, clean(body.sourceNote, 40) || null, new Date().toISOString());
       entry.manageToken = token();
       try { entry.image = saveImage(body.imageDataUrl); } catch (e) { return json(res, 400, { error: e.message }); }
       db.codes.push(entry); save();
