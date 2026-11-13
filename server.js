@@ -120,8 +120,15 @@ function state() {
   const flagged = pool.filter(c => !c.pinned && c.status === 'available' && c.reports > 0)
     .sort((a, b) => a.reports - b.reports);
   const grey = pool.filter(c => !c.pinned && c.status !== 'available');
-  const codes = [...pinned, ...[...clean, ...flagged].slice(0, 20), ...grey];
-  const collected = db.codes.filter(c => c.collected && c.status !== 'deleted').map(pub);
+  const collAll = db.codes.filter(c => c.collected && c.status !== 'deleted');
+  const collClean = collAll.filter(c => c.status === 'available' && !(c.reports > 0));
+  shuffle(collClean);
+  const collFlagged = collAll.filter(c => c.status === 'available' && c.reports > 0)
+    .sort((a, b) => a.reports - b.reports);
+  const collGrey = collAll.filter(c => c.status !== 'available');
+  const codes = [...pinned, ...[...clean, ...flagged].slice(0, 20), ...grey,
+    ...[...collClean, ...collFlagged].slice(0, 50), ...collGrey];
+  const collected = collAll.map(pub);
   const availableCount = pool.filter(c => c.status === 'available').length;
   const gallery = db.gallery.filter(g => !g.hidden)
     .sort((a, b) => b.id - a.id).slice(0, 60)
@@ -210,6 +217,16 @@ async function handle(req, res) {
       if (db.codes.some(c => c.code === code && c.status !== 'deleted' && !c.collected))
         return json(res, 409, { error: '这个码已经在池子里了' });
       const total = Math.min(999, Math.max(1, parseInt(body.totalSlots, 10) || 30));
+      const collEntry = db.codes.find(c => c.code === code && c.status !== 'deleted' && c.collected);
+      if (collEntry) {
+        collEntry.collected = false;
+        collEntry.totalSlots = total; collEntry.remaining = total;
+        collEntry.status = 'available'; collEntry.reports = 0; collEntry.reportedBy = [];
+        collEntry.sourceNote = clean(body.sourceNote, 40) || null;
+        if (!collEntry.manageToken) collEntry.manageToken = token();
+        save();
+        return json(res, 201, { entry: pub(collEntry), manageToken: collEntry.manageToken, managePath: '/manage/' + collEntry.manageToken });
+      }
       const entry = mk(code, total, false, clean(body.sourceNote, 40) || null, new Date().toISOString());
       entry.manageToken = token();
       try { entry.image = saveImage(body.imageDataUrl); } catch (e) { return json(res, 400, { error: e.message }); }
